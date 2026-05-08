@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Truth or Dare Multiplayer</title>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<style>
+body{font-family:Arial;background:#111;color:#fff;text-align:center}
+.hidden{display:none}
+button{padding:15px 25px;margin:10px;font-size:18px;border:none;border-radius:10px;cursor:pointer}
+.truth{background:#3498db;color:white}
+.dare{background:#e74c3c;color:white}
+</style>
+</head>
+
+<body>
+
+<!-- MODE SELECT -->
+<div id="modeScreen">
+    <h1>Truth or Dare</h1>
+    <button onclick="startOffline()">Offline Multiplayer</button>
+    <button onclick="startOnline()">Online Room</button>
+</div>
+
+<!-- GAME AREA -->
+<div id="gameUI" class="hidden">
+    <h2 id="currentTurn">Waiting...</h2>
+
+    <div id="choiceButtons">
+        <button class="truth" onclick="selectChoice('truth')">Truth</button>
+        <button class="dare" onclick="selectChoice('dare')">Dare</button>
+    </div>
+
+    <h3 id="challengeText"></h3>
+    <button onclick="nextTurn()">Next Turn</button>
+</div>
+
+<script>
+let socket=null;
+let gameMode="";
+let currentRoom="";
+let playerName="";
+let offlinePlayers=[];
+let turnIndex=0;
+
+const truths=["Biggest crush?","Secret fantasy?","Embarrassing moment?"];
+const dares=["Dance 10 sec","Sing loudly","Do 10 pushups"];
+
+/* MODE SELECT */
+function startOffline(){
+    gameMode="offline";
+    document.getElementById("modeScreen").style.display="none";
+    document.getElementById("gameUI").classList.remove("hidden");
+
+    const names=prompt("Enter players (comma separated)");
+    offlinePlayers=names.split(",").map(n=>n.trim());
+    showTurn(offlinePlayers[0]);
+}
+
+function startOnline(){
+    gameMode="online";
+    document.getElementById("modeScreen").style.display="none";
+    document.getElementById("gameUI").classList.remove("hidden");
+
+    playerName=prompt("Enter your name");
+    currentRoom=prompt("Enter room code");
+
+    socket=io("https://truthordare-18plus-backend.onrender.com");
+
+    socket.emit("joinRoom",{room:currentRoom,name:playerName});
+
+    socket.on("currentTurn",(data)=>{
+        showTurn(data.player);
+    });
+
+    socket.on("newChallenge",(data)=>{
+        showChallenge(data.type,data.challenge);
+    });
+}
+
+/* COMMON FUNCTIONS */
+
+function showTurn(player){
+    document.getElementById("currentTurn").innerText=player+"'s Turn";
+}
+
+function showChallenge(type,challenge){
+    document.getElementById("challengeText").innerText=type.toUpperCase()+": "+challenge;
+}
+
+/* CHOICE */
+function selectChoice(type){
+    const challenge= type=="truth"
+        ? truths[Math.floor(Math.random()*truths.length)]
+        : dares[Math.floor(Math.random()*dares.length)];
+
+    if(gameMode=="online"){
+        socket.emit("choiceMade",{room:currentRoom,type,challenge,player:playerName});
+    }else{
+        showChallenge(type,challenge);
+    }
+}
+
+/* NEXT TURN */
+function nextTurn(){
+    if(gameMode=="online"){
+        socket.emit("nextTurn",{room:currentRoom});
+    }else{
+        turnIndex++;
+        if(turnIndex>=offlinePlayers.length)turnIndex=0;
+        showTurn(offlinePlayers[turnIndex]);
+        document.getElementById("challengeText").innerText="";
+    }
+}
+</script>
+
+</body>
+</html>
